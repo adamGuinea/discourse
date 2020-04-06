@@ -2,6 +2,7 @@ import path from "path";
 import http from "http";
 import express from "express";
 import socketio from "socket.io";
+import { formatMessage } from "./utils/messages";
 
 const app = express();
 
@@ -11,19 +12,26 @@ const io = socketio(server);
 
 app.use(express.static(path.join(__dirname, "../public")));
 
+const botName = "Ernest";
+
 //run on connection
 io.on("connection", (socket: any) => {
-  socket.emit("message", "Welcome to discourse");
+  socket.emit("message", formatMessage(botName, `Welcome to Discourse`));
 
   //broadcast on new connection
-  socket.broadcast.emit("message", "A new user has joined the chat");
+  socket.broadcast.emit(
+    "message",
+    formatMessage(botName, "A new user has joined the chat")
+  );
 
   //when someone disconnects
-  socket.on("disconnect", () => io.emit("message", "A user has left the chat"));
+  socket.on("disconnect", () =>
+    io.emit("message", formatMessage(botName, `A new user left the chat`))
+  );
 
   //listen for chat
   socket.on("chatMessage", (msg: string) => {
-    io.emit("message", msg);
+    io.emit("message", formatMessage("user", msg));
   });
 });
 
