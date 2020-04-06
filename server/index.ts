@@ -1,7 +1,28 @@
+import path from "path";
+import http from "http";
 import express from "express";
+import socketio from "socket.io";
 
 const app = express();
 
-const PORT = 3000 || process.env.PORT;
+const server = http.createServer(app);
 
-app.listen(PORT, () => console.info(`running on ${PORT}`));
+const io = socketio(server);
+
+app.use(express.static(path.join(__dirname, "../public")));
+
+//run on connection
+io.on("connection", (socket: any) => {
+  socket.emit("message", "Welcome to discourse");
+
+  //broadcast on new connection
+  socket.broadcast.emit("message", "A new user has joined the chat");
+
+  //when someone disconnects
+
+  socket.on("disconnect", () => io.emit("message", "A user has left the chat"));
+});
+
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => console.info(`running on ${PORT}`));
