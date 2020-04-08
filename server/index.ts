@@ -2,7 +2,8 @@ import path from "path";
 import http from "http";
 import express from "express";
 import socketio from "socket.io";
-import { formatMessage } from "./utils/messages";
+import redis from "redis";
+import { formatMessage, Message } from "./utils/messages";
 import {
   joinUser,
   User,
@@ -10,6 +11,12 @@ import {
   onUserExit,
   getUsersInRoom,
 } from "./utils/users";
+
+const PORT = process.env.PORT || 3000;
+
+const REDIS_PORT = 6379;
+
+const redisClient = redis.createClient(REDIS_PORT);
 
 const app = express();
 
@@ -23,6 +30,17 @@ const botName = "Ernest";
 
 //run on connection
 io.on("connection", (socket: any) => {
+  redisClient.lrange("savedMessages", 0, -1, (_err, messageList) => {
+    const savedMessages = messageList.reverse();
+
+    savedMessages.forEach((message) => {
+      const user = getCurrentUser(socket.id);
+
+      user &&
+        io.to(user.room).emit("message", formatMessage(user.username, message));
+    });
+  });
+
   socket.on("joinRoom", ({ username, room }: User) => {
     const user = joinUser(socket.id, username, room);
 
@@ -49,7 +67,13 @@ io.on("connection", (socket: any) => {
   socket.on("chatMessage", (msg: string) => {
     const user = getCurrentUser(socket.id);
 
-    user && io.to(user.room).emit("message", formatMessage(user.username, msg));
+    if (user) {
+      const savedMessage = JSON.stringify({ name: user.username, data: msg });
+      redisClient.lpush("savedMessage", savedMessage, (err, res) => {
+        redisClient.ltrim("savedMessage", 0, 9);
+      });
+      io.to(user.room).emit("message", formatMessage(user.username, msg));
+    }
   });
 
   //when someone disconnects
@@ -69,7 +93,5 @@ io.on("connection", (socket: any) => {
     }
   });
 });
-
-const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => console.info(`running on ${PORT}`));
