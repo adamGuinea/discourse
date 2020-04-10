@@ -105,6 +105,10 @@ io.on("connection", (socket: any) => {
         room: user.room,
         users: getUsersInRoom(user.room),
       });
+
+      //flush db once everyone leaves
+      const userCount = getUsersInRoom(user.room);
+      userCount.length === 0 && redisClient.flushdb();
     }
   });
 });
