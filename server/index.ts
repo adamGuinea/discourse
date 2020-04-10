@@ -3,7 +3,7 @@ import http from "http";
 import express from "express";
 import socketio from "socket.io";
 import redis from "redis";
-import { formatMessage, Message } from "./utils/messages";
+import { formatMessage, SavedData } from "./utils/messages";
 import {
   joinUser,
   User,
@@ -30,23 +30,27 @@ const botName = "Ernest";
 
 //run on connection
 io.on("connection", (socket: any) => {
-  redisClient.lrange("savedMessages", 0, -1, (_err, messageList) => {
-    const savedMessages = messageList.reverse();
-
-    savedMessages.forEach((message) => {
-      const user = getCurrentUser(socket.id);
-
-      user &&
-        io.to(user.room).emit("message", formatMessage(user.username, message));
-    });
-  });
-
   socket.on("joinRoom", ({ username, room }: User) => {
     const user = joinUser(socket.id, username, room);
 
     socket.join(user.room);
+
     //greet the user
     socket.emit("message", formatMessage(botName, `Welcome to Discourse`));
+
+    //send previous chat messages
+    redisClient.lrange("messages", 0, -1, (err, savedMessages) => {
+      if (err) {
+        console.error(err);
+      }
+      savedMessages = savedMessages.reverse();
+      savedMessages.forEach((m: string) => {
+        const savedData: SavedData = JSON.parse(m);
+        if (savedData.room == user.room) {
+          socket.emit("message", savedData.message);
+        }
+      });
+    });
 
     //broadcast to room on new connection
     socket.broadcast
@@ -68,11 +72,22 @@ io.on("connection", (socket: any) => {
     const user = getCurrentUser(socket.id);
 
     if (user) {
-      const savedMessage = JSON.stringify({ name: user.username, data: msg });
-      redisClient.lpush("savedMessage", savedMessage, (err, res) => {
-        redisClient.ltrim("savedMessage", 0, 9);
+      const prettyMsg = formatMessage(user.username, msg);
+      io.to(user.room).emit("message", prettyMsg);
+
+      //save chat history
+      const messageData = {
+        message: prettyMsg,
+        room: user.room,
+      };
+
+      const stringifyMsg = JSON.stringify(messageData);
+      redisClient.lpush("messages", stringifyMsg, (err, _res) => {
+        if (err) {
+          console.error(err);
+        }
+        redisClient.ltrim("messages", 0, 9);
       });
-      io.to(user.room).emit("message", formatMessage(user.username, msg));
     }
   });
 

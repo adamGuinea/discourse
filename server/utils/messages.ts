@@ -1,9 +1,14 @@
 import moment from "moment";
-import { type } from "os";
 
 export type Message = {
   username: string;
   text: string;
+};
+
+export type SavedData = {
+  room: string;
+  message: Message;
+  time: Date;
 };
 
 export function formatMessage(username: string, text: string) {
